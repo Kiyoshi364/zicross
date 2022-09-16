@@ -46,23 +46,22 @@ test "UFits up until u16" {
     }
 }
 
-const BoardOptions = struct {
-    use_camera: ?CameraOptions = null,
-    use_cursor: ?CursorOptions = null,
-    const CameraOptions = struct {
-        screen_width: u8,
-        screen_height: u8,
-    };
-    const CursorOptions = struct {
-        init_x: u8 = 0,
-        init_y: u8 = 0,
-    };
+pub const CameraOptions = struct {
+    screen_width: u8,
+    screen_height: u8,
 };
 
-fn Camera(
-        cam: BoardOptions.CameraOptions,
-        w: u8, h: u8
-) type {
+pub const CursorOptions = struct {
+    init_x: u8 = 0,
+    init_y: u8 = 0,
+};
+
+pub const BoardOptions = struct {
+    use_camera: ?CameraOptions = null,
+    use_cursor: ?CursorOptions = null,
+};
+
+fn Camera(cam: CameraOptions, w: u8, h: u8) type {
     cassert( cam.screen_width <= w,
         "Camera screen_width must be less or equal than width" );
     cassert( cam.screen_height <= h,
@@ -70,15 +69,12 @@ fn Camera(
     return struct {
         const width = w;
         const height = h;
-        offx: UFits(w) = cam.screen_width,
-        offy: UFits(h) = cam.screen_height,
+        offx: UFits(w) = 0,
+        offy: UFits(h) = 0,
     };
 }
 
-fn Cursor(
-        cur: BoardOptions.CursorOptions,
-        w: u8, h: u8
-) type {
+fn Cursor(cur: CursorOptions, w: u8, h: u8) type {
     return struct {
         const width = w;
         const height = h;
@@ -90,11 +86,15 @@ fn Cursor(
 pub fn Board(
         comptime Global_data: type,
         comptime Tile_data: type,
-        width: u8, height: u8,
+        w: u8, h: u8,
         options: BoardOptions,
 ) type {
     _ = options;
     return struct {
+        const Self = @This();
+        const width = w;
+        const height = h;
+
         data: Global_data,
         tiles: [width][height]Tile_data,
         camera: if ( options.use_camera ) |cam|
@@ -103,6 +103,102 @@ pub fn Board(
         cursor: if ( options.use_cursor ) |cur|
             Cursor(cur, width, height) else void
             = if ( options.use_cursor ) |_| .{} else void{},
+
+        const TileIterConst = struct {
+            ptr: *const Self,
+            x: u8 = 0,
+            y: u8 = 0,
+
+            const Entry = struct {
+                tile: Tile_data, x: u8, y: u8,
+            };
+            pub fn next(self: *@This()) ?Entry {
+                const ret = .{
+                    .tile = self.ptr.tiles[self.x][self.y],
+                    .x = self.x,
+                    .y = self.y,
+                };
+                if ( self.x + 1 < width ) {
+                    self.*.x += 1;
+                } else {
+                    if ( self.y + 1 < height ) {
+                        self.*.x = 0;
+                        self.*.y += 1;
+                    } else {
+                        return null;
+                    }
+                }
+                return ret;
+            }
+        };
+
+        pub fn tileIter(self: *Self) TileIterConst {
+            return .{ .ptr = self, };
+        }
+
+        const TileIterConstRef = struct {
+            ptr: *const Self,
+            x: u8 = 0,
+            y: u8 = 0,
+
+            const Entry = struct {
+                tile: *const Tile_data, x: u8, y: u8,
+            };
+            pub fn next(self: *@This()) ?Entry {
+                const ret = .{
+                    .tile = &self.ptr.tiles[self.x][self.y],
+                    .x = self.x,
+                    .y = self.y,
+                };
+                if ( self.x + 1 < width ) {
+                    self.*.x += 1;
+                } else {
+                    if ( self.y + 1 < height ) {
+                        self.*.x = 0;
+                        self.*.y += 1;
+                    } else {
+                        return null;
+                    }
+                }
+                return ret;
+            }
+        };
+
+        pub fn tileIterConstRef(self: *Self) TileIterConstRef {
+            return .{ .ptr = self, };
+        }
+
+        const TileIterRef = struct {
+            ptr: *Self,
+            x: u8 = 0,
+            y: u8 = 0,
+
+            const Entry = struct {
+                tile: *Tile_data, x: u8, y: u8,
+            };
+            pub fn next(self: *@This()) ?Entry {
+                const ret = .{
+                    .tile = &self.ptr.tiles[self.x][self.y],
+                    .x = self.x,
+                    .y = self.y,
+                };
+                if ( self.x + 1 < width ) {
+                    self.*.x += 1;
+                } else {
+                    if ( self.y + 1 < height ) {
+                        self.*.x = 0;
+                        self.*.y += 1;
+                    } else {
+                        return null;
+                    }
+                }
+                return ret;
+            }
+        };
+
+        pub fn tileIterRef(self: *Self) TileIterRef {
+            return .{ .ptr = self, };
+        }
     };
 }
 
