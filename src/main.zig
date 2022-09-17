@@ -1,11 +1,12 @@
 const w4 = @import("wasm4.zig");
 
 const board = @import("board.zig");
+const game = @import("game.zig");
 
 const SCREEN_WIDTH = 160;
 const SCREEN_HEIGHT = 160;
 
-const tilesize = 9;
+pub const tilesize = 9;
 
 const Tile = u2;
 const boardWidth = 32;
@@ -19,24 +20,78 @@ const cur_opts = board.CursorOptions{
     .init_x = 5,
     .init_y = 7,
 };
-const Board = board.Board(void, Tile, boardWidth, boardHeight, .{
+
+pub const Board = board.Board(void, Tile, boardWidth, boardHeight, .{
     .use_camera = cam_opts,
     .use_cursor = cur_opts,
 });
-var globalBoard: Board = undefined;
+
+pub const State = struct {
+    board: *Board,
+
+    const Self = @This();
+
+    pub const MAXSIZE = 58975;
+    const mem_ptr = 0x19a0;
+    const mem_buf = @intToPtr(*[MAXSIZE]u8, mem_ptr);
+
+    pub const alloced_memory = calc_used();
+
+    fn init() Self {
+        comptime var self: Self = undefined;
+        comptime var alloc = 0;
+
+        inline for (@typeInfo(Self).Struct.fields) |field| {
+            const T = @typeInfo(field.field_type).Pointer.child;
+            switch (@typeInfo(T)) {
+                .Int, .Bool, .Array, .Struct, .Enum => {
+                    const size = @sizeOf(T);
+                    if ( alloc + size > MAXSIZE ) {
+                        @compileLog("Type to alloc", T);
+                        @compileLog("Size to alloc", size);
+                        @compileLog("Before alloc", alloc);
+                        @compileLog("After alloc", alloc + size);
+                        @compileError("ptrs.init: Not enough memory!");
+                    }
+                    @field(self, field.name) = @intToPtr(*T, mem_ptr + alloc);
+                    alloc += size;
+                },
+                else => {
+                    @compileLog(field.name, T);
+                    @compileError("ptrs: unhandled case.\nIf you got this compileError, consider adding a case for the unhandled type.");
+                },
+            }
+        }
+        return self;
+    }
+
+    fn calc_used() comptime_int {
+        comptime var alloc = 0;
+        inline for (@typeInfo(Self).Struct.fields) |field| {
+            const T = @typeInfo(field.field_type).Pointer.child;
+            const size = @sizeOf(T);
+            alloc += size;
+        }
+        return alloc;
+    }
+};
+
+const ptrs: State = State.init();
+
+pub const Input = void;
 
 export fn start() void {
     const debug = @import("builtin").mode == .Debug;
     if ( debug ) {
         w4.tone(262 | (253 << 16), 60, 30, w4.TONE_PULSE1 | w4.TONE_MODE3);
     }
-    globalBoard = Board{
+    ptrs.board.* = Board{
         .data = {},
         .tiles = [_][boardHeight]Tile{ [_]Tile{ 0 } ** boardHeight } ** boardWidth,
     };
 
     {
-        var iter = globalBoard.tileIterRef();
+        var iter = ptrs.board.tileIterRef();
         while (iter.next()) |triple| {
             const x = triple.x;
             const y = triple.y;
@@ -49,59 +104,19 @@ export fn update() void {
     w4.DRAW_COLORS.* = 2;
     w4.text("Hello from Zig!", 10, 10);
 
-    const gamepad = w4.GAMEPAD1.*;
-    if (gamepad & w4.BUTTON_1 != 0) {
+    const pad_old = w4.GAMEPAD1.*;
+    const pad_new = w4.GAMEPAD1.*;
+    const pad_diff = pad_old ^ pad_new;
+    _ = pad_diff;
+
+    if (pad_new & w4.BUTTON_1 != 0) {
         w4.DRAW_COLORS.* = 4;
     }
 
-    drawBoard();
-}
+    const input = Input{};
 
-fn drawBoard() void {
-    drawTiles();
-    drawCursor();
-}
-
-fn drawCursor() void {
-    const cursor = globalBoard.cursor;
-    const camera = globalBoard.camera;
-    const posx = tilesize * (@as(i32, cursor.x)-@as(i32, camera.offx));
-    const posy = tilesize * (@as(i32, cursor.y)-@as(i32, camera.offy));
-
-    const thirdSize = (tilesize-2)/3;
-    const halfTSize = thirdSize/2;
-
-    const endposx = posx + tilesize - thirdSize;
-    const endposy = posy + tilesize - thirdSize;
-
-    w4.DRAW_COLORS.* = 4;
-
-    w4.rect(posx+1, posy+1, thirdSize, halfTSize);
-    w4.rect(posx+1, posy+1, halfTSize, thirdSize);
-
-    w4.rect(posx+1, endposy + thirdSize - 2, thirdSize, halfTSize);
-    w4.rect(posx+1, endposy - 1, thirdSize/2, thirdSize);
-
-    w4.rect(endposx-1, posy + 1, thirdSize, halfTSize);
-    w4.rect(endposx + thirdSize - 2, posy + 1, halfTSize, thirdSize);
-
-    w4.rect(endposx-1, endposy + thirdSize - 2, thirdSize, halfTSize);
-    w4.rect(endposx + thirdSize - 2, endposy-1, halfTSize, thirdSize);
-}
-
-fn drawTiles() void {
-    const cam = globalBoard.camera;
-    const offx = cam.offx;
-    const offy = cam.offy;
-
-    var iter = globalBoard.tileIter();
-
-    while (iter.next()) |triple| {
-        w4.DRAW_COLORS.* = triple.tile;
-        const x = tilesize * (@as(i32, triple.x) - @as(i32, offx));
-        const y = tilesize * (@as(i32, triple.y) - @as(i32, offy));
-        w4.rect(x, y, tilesize, tilesize);
-    }
+    _ = game.update(ptrs, input);
+    game.draw(ptrs);
 }
 
 const ST = ?*@import("std").builtin.StackTrace;

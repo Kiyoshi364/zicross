@@ -132,7 +132,7 @@ pub fn Board(
             }
         };
 
-        pub fn tileIter(self: *Self) TileIterConst {
+        pub fn tileIter(self: *const Self) TileIterConst {
             return .{ .ptr = self, };
         }
 
@@ -164,7 +164,7 @@ pub fn Board(
             }
         };
 
-        pub fn tileIterConstRef(self: *Self) TileIterConstRef {
+        pub fn tileIterConstRef(self: *const Self) TileIterConstRef {
             return .{ .ptr = self, };
         }
 
