@@ -1,21 +1,76 @@
 const w4 = @import("wasm4.zig");
 
-const main = @import("main.zig");
+const boardLib = @import("board.zig");
 
-const Input = main.Input;
-const State = main.State;
-const Board = main.Board;
+const SCREEN_WIDTH = 160;
+const SCREEN_HEIGHT = 160;
 
-const tilesize = main.tilesize;
+const tilesize = 9;
 
-pub fn update(ptrs: State, input: Input) State {
-    _ = input;
-    return ptrs;
+pub const Tile = u2;
+pub const boardWidth = 32;
+pub const boardHeight = boardWidth;
+
+const cam_opts = boardLib.CameraOptions{
+    .screen_width = 160 / tilesize,
+    .screen_height = 160 / tilesize,
+};
+const cur_opts = boardLib.CursorOptions{
+    .init_x = 5,
+    .init_y = 7,
+};
+
+pub const Board = boardLib.Board(void, Tile, boardWidth, boardHeight, .{
+    .use_camera = cam_opts,
+    .use_cursor = cur_opts,
+});
+
+pub const State = struct {
+    old_gpads: [4]u8,
+    board: Board,
+};
+
+pub const Input = struct {
+    gpads: [4]u8,
+};
+
+pub fn firstState() State {
+    var board = Board{
+        .data = {},
+        .tiles = [_][boardHeight]Tile{ [_]Tile{ 0 } ** boardHeight } ** boardWidth,
+    };
+
+    {
+        var iter = board.tileIterRef();
+        while (iter.next()) |triple| {
+            const x = triple.x;
+            const y = triple.y;
+            triple.tile.* = @intCast(Tile, (x+y)%3 + 1);
+        }
+    }
+
+    const state = State{
+        .old_gpads = [_]u8{ 0 } ** 4,
+        .board = board,
+    };
+    return state;
 }
 
-pub fn draw(ptrs: State) void {
-    drawTiles(ptrs.board.*);
-    drawCursor(ptrs.board.*);
+pub fn sampleInput() Input {
+    const input = Input{
+        .gpads = @as(*const [4]u8, w4.GAMEPAD1).*,
+    };
+    return input;
+}
+
+pub fn update(oldstate: State, input: Input) State {
+    _ = input;
+    return oldstate;
+}
+
+pub fn draw(state: State) void {
+    drawTiles(state.board);
+    drawCursor(state.board);
 }
 
 fn drawCursor(board: Board) void {
