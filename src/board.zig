@@ -203,6 +203,45 @@ test "Board example" {
     _ = a;
 }
 
+pub const Button = enum(u8) {
+    const w4 = @import("wasm4.zig");
+    B1 = w4.BUTTON_1,
+    B2 = w4.BUTTON_2,
+    Left = w4.BUTTON_LEFT,
+    Right = w4.BUTTON_RIGHT,
+    Up = w4.BUTTON_UP,
+    Down = w4.BUTTON_DOWN,
+};
+
+pub const ButtonStatus = enum(u2) {
+    Released = 0b00,
+    Pressed = 0b01,
+    Unpressed = 0b10,
+    Held = 0b11,
+};
+
+fn join(old: u1, new: u1) u2 {
+    return (@as(u2, old) << 1) | @as(u2, new);
+}
+
+fn isFlagSet(bits: u8, flag: u8) u1 {
+    return @boolToInt(bits & flag == flag);
+}
+
+pub fn checkInput(old_pad: u8, new_pad: u8) [6]ButtonStatus {
+    const buttons = [_]u8{
+        @enumToInt(Button.Up),   @enumToInt(Button.Left),
+        @enumToInt(Button.Down), @enumToInt(Button.Right),
+        @enumToInt(Button.B1),   @enumToInt(Button.B2),
+    };
+    var bs: [6]ButtonStatus = undefined;
+    for (buttons) |b, i| {
+        bs[i] = @intToEnum(ButtonStatus, join(
+                isFlagSet(old_pad, b), isFlagSet(new_pad, b)));
+    }
+    return bs;
+}
+
 test "It compiles!" {
     testing.refAllDeclsRecursive(@This());
 }

@@ -27,7 +27,9 @@ const Cursor = boardLib.Cursor(cur_opts, boardWidth, boardHeight);
 const gpads_max_timer = 10;
 
 pub const State = struct {
-    old_gpads: [4]u8,
+    gpads: [4]u8 = .{ 0 } ** 4,
+    timer: [4]u4 = .{ 0 } ** 4,
+
     board: Board = .{},
     camera: Camera = .{},
     cursor: Cursor = .{},
@@ -49,7 +51,6 @@ pub fn firstState() State {
     }
 
     const state = State{
-        .old_gpads = [_]u8{ 0 } ** 4,
         .board = board,
     };
     return state;
@@ -63,8 +64,69 @@ pub fn sampleInput() Input {
 }
 
 pub fn update(oldstate: State, input: Input) State {
-    _ = input;
-    return oldstate;
+    var newstate = oldstate;
+
+    { // Reading inputs
+        const bstats
+            = boardLib.checkInput(oldstate.gpads[0], input.gpads[0]);
+        const moveUp
+            = oldstate.cursor.y > 0
+            and ( bstats[0] == .Pressed
+                or (bstats[0] == .Held and oldstate.timer[0] == 0) );
+        const moveDown
+            = oldstate.cursor.y < @TypeOf(oldstate.board).height - 1
+            and ( bstats[2] == .Pressed
+                or (bstats[2] == .Held and oldstate.timer[2] == 0) );
+        const moveLeft
+            = oldstate.cursor.x > 0
+            and ( bstats[1] == .Pressed
+                or (bstats[1] == .Held and oldstate.timer[1] == 0) );
+        const moveRight
+            = oldstate.cursor.x < @TypeOf(oldstate.board).width - 1
+            and ( bstats[3] == .Pressed
+                or (bstats[3] == .Held and oldstate.timer[3] == 0) );
+        const button1 = bstats[4];
+        const button2 = bstats[5];
+
+        if ( moveUp ) {
+            newstate.timer[0] = gpads_max_timer;
+            newstate.cursor.y -= 1;
+        } else if ( moveDown ) {
+            newstate.timer[2] = gpads_max_timer;
+            newstate.cursor.y += 1;
+        }
+
+        if ( moveLeft ) {
+            newstate.timer[1] = gpads_max_timer;
+            newstate.cursor.x -= 1;
+        } else if ( moveRight ) {
+            newstate.timer[3] = gpads_max_timer;
+            newstate.cursor.x += 1;
+        }
+
+        switch ( button1 ) {
+            .Released => {},
+            .Pressed => {
+                w4.trace("A1");
+            },
+            .Unpressed => {},
+            .Held => {},
+        }
+
+        switch ( button2 ) {
+            .Released => {},
+            .Pressed => {
+                w4.trace("B2");
+            },
+            .Unpressed => {},
+            .Held => {},
+        }
+
+        for (newstate.timer) |*t| if ( t.* > 0 ) { t.* -= 1; };
+    }
+
+    newstate.gpads = input.gpads;
+    return newstate;
 }
 
 pub fn draw(state: State) void {
