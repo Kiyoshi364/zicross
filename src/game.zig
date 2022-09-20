@@ -20,14 +20,17 @@ const cur_opts = boardLib.CursorOptions{
     .init_y = 7,
 };
 
-pub const Board = boardLib.Board(void, Tile, boardWidth, boardHeight, .{
-    .use_camera = cam_opts,
-    .use_cursor = cur_opts,
-});
+const Board = boardLib.Board(Tile, boardWidth, boardHeight);
+const Camera = boardLib.Camera(cam_opts, boardWidth, boardHeight);
+const Cursor = boardLib.Cursor(cur_opts, boardWidth, boardHeight);
+
+const gpads_max_timer = 10;
 
 pub const State = struct {
     old_gpads: [4]u8,
-    board: Board,
+    board: Board = .{},
+    camera: Camera = .{},
+    cursor: Cursor = .{},
 };
 
 pub const Input = struct {
@@ -35,12 +38,8 @@ pub const Input = struct {
 };
 
 pub fn firstState() State {
-    var board = Board{
-        .data = {},
-        .tiles = [_][boardHeight]Tile{ [_]Tile{ 0 } ** boardHeight } ** boardWidth,
-    };
-
-    {
+    var board = Board{};
+    { // Init board
         var iter = board.tileIterRef();
         while (iter.next()) |triple| {
             const x = triple.x;
@@ -69,13 +68,11 @@ pub fn update(oldstate: State, input: Input) State {
 }
 
 pub fn draw(state: State) void {
-    drawTiles(state.board);
-    drawCursor(state.board);
+    drawTiles(state.board, state.camera);
+    drawCursor(state.camera, state.cursor);
 }
 
-fn drawCursor(board: Board) void {
-    const cursor = board.cursor;
-    const camera = board.camera;
+fn drawCursor(camera: Camera, cursor: Cursor) void {
     const posx = tilesize * (@as(i32, cursor.x)-@as(i32, camera.offx));
     const posy = tilesize * (@as(i32, cursor.y)-@as(i32, camera.offy));
 
@@ -100,8 +97,7 @@ fn drawCursor(board: Board) void {
     w4.rect(endposx + thirdSize - 2, endposy-1, halfTSize, thirdSize);
 }
 
-fn drawTiles(board: Board) void {
-    const cam = board.camera;
+fn drawTiles(board: Board, cam: Camera) void {
     const offx = cam.offx;
     const offy = cam.offy;
 

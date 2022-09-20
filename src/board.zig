@@ -56,12 +56,7 @@ pub const CursorOptions = struct {
     init_y: u8 = 0,
 };
 
-pub const BoardOptions = struct {
-    use_camera: ?CameraOptions = null,
-    use_cursor: ?CursorOptions = null,
-};
-
-fn Camera(cam: CameraOptions, w: u8, h: u8) type {
+pub fn Camera(cam: CameraOptions, w: u8, h: u8) type {
     cassert( cam.screen_width <= w,
         "Camera screen_width must be less or equal than width" );
     cassert( cam.screen_height <= h,
@@ -74,7 +69,7 @@ fn Camera(cam: CameraOptions, w: u8, h: u8) type {
     };
 }
 
-fn Cursor(cur: CursorOptions, w: u8, h: u8) type {
+pub fn Cursor(cur: CursorOptions, w: u8, h: u8) type {
     return struct {
         const width = w;
         const height = h;
@@ -84,25 +79,16 @@ fn Cursor(cur: CursorOptions, w: u8, h: u8) type {
 }
 
 pub fn Board(
-        comptime Global_data: type,
         comptime Tile_data: type,
         w: u8, h: u8,
-        options: BoardOptions,
 ) type {
-    _ = options;
     return struct {
         const Self = @This();
-        const width = w;
-        const height = h;
+        pub const width = w;
+        pub const height = h;
 
-        data: Global_data,
-        tiles: [width][height]Tile_data,
-        camera: if ( options.use_camera ) |cam|
-            Camera(cam, width, height) else void
-            = if ( options.use_camera ) |_| .{} else void{},
-        cursor: if ( options.use_cursor ) |cur|
-            Cursor(cur, width, height) else void
-            = if ( options.use_cursor ) |_| .{} else void{},
+        tiles: [width][height]Tile_data
+            = [_][height]Tile_data{ [_]Tile_data{ 0 } ** height } ** width,
 
         const TileIterConst = struct {
             ptr: *const Self,
