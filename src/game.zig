@@ -8,16 +8,18 @@ const SCREEN_HEIGHT = 160;
 const tilesize = 9;
 
 pub const Tile = u2;
-pub const boardWidth = 32;
+pub const boardWidth = 8;
 pub const boardHeight = boardWidth;
 
 const cam_opts = boardLib.CameraOptions{
     .screen_width = 160 / tilesize,
     .screen_height = 160 / tilesize,
+    .start_x = 140 - boardWidth * tilesize - 2,
+    .start_y = 140 - boardHeight * tilesize - 2,
 };
 const cur_opts = boardLib.CursorOptions{
-    .init_x = 5,
-    .init_y = 7,
+    .init_x = 4,
+    .init_y = 3,
 };
 
 const Board = boardLib.Board(Tile, boardWidth, boardHeight);
@@ -106,14 +108,22 @@ pub fn update(oldstate: State, input: Input) State {
 
         switch ( button1 ) {
             .Released => {},
-            .Pressed => {},
+            .Pressed => {
+                const cur = oldstate.cursor;
+                const oldTile = oldstate.board.tiles[cur.y][cur.x];
+                newstate.board.tiles[cur.y][cur.x] = oldTile +% 1;
+            },
             .Unpressed => {},
             .Held => {},
         }
 
         switch ( button2 ) {
             .Released => {},
-            .Pressed => {},
+            .Pressed => {
+                const cur = oldstate.cursor;
+                const oldTile = oldstate.board.tiles[cur.y][cur.x];
+                newstate.board.tiles[cur.y][cur.x] = oldTile -% 1;
+            },
             .Unpressed => {},
             .Held => {},
         }
@@ -132,8 +142,11 @@ pub fn draw(state: State) void {
 }
 
 fn drawCursor(camera: Camera, cursor: Cursor) void {
-    const posx = tilesize * (@as(i32, cursor.x)-@as(i32, camera.offx));
-    const posy = tilesize * (@as(i32, cursor.y)-@as(i32, camera.offy));
+    const sx = Camera.opts.start_x;
+    const sy = Camera.opts.start_y;
+
+    const posx = sx + tilesize * (@as(i32, cursor.x)-@as(i32, camera.offx));
+    const posy = sy + tilesize * (@as(i32, cursor.y)-@as(i32, camera.offy));
 
     const thirdSize = (tilesize-2)/3;
     const halfTSize = thirdSize/2;
@@ -157,16 +170,23 @@ fn drawCursor(camera: Camera, cursor: Cursor) void {
 }
 
 fn drawTiles(board: Board, cam: Camera) void {
+    const sx = Camera.opts.start_x;
+    const sy = Camera.opts.start_y;
+
     const offx = cam.offx;
     const offy = cam.offy;
 
     var iter = board.tileIter();
 
+    w4.DRAW_COLORS.* = 0x4;
+    w4.rect(sx-2, sy-2,
+        boardWidth * tilesize + 4, boardHeight * tilesize + 4);
+
     while (iter.next()) |triple| {
         w4.DRAW_COLORS.* = triple.tile;
         const x = tilesize * (@as(i32, triple.x) - @as(i32, offx));
         const y = tilesize * (@as(i32, triple.y) - @as(i32, offy));
-        w4.rect(x, y, tilesize, tilesize);
+        w4.rect(x + sx, y + sy, tilesize, tilesize);
     }
 }
 

@@ -49,6 +49,8 @@ test "UFits up until u16" {
 pub const CameraOptions = struct {
     screen_width: u8,
     screen_height: u8,
+    start_x: u8 = 0,
+    start_y: u8 = 0,
 };
 
 pub const CursorOptions = struct {
@@ -57,13 +59,8 @@ pub const CursorOptions = struct {
 };
 
 pub fn Camera(cam: CameraOptions, w: u8, h: u8) type {
-    cassert( cam.screen_width <= w,
-        "Camera screen_width must be less or equal than width" );
-    cassert( cam.screen_height <= h,
-        "Camera screen_height must be less or equal than height" );
     return struct {
-        const width = w;
-        const height = h;
+        pub const opts = cam;
         offx: UFits(w) = 0,
         offy: UFits(h) = 0,
     };
@@ -71,8 +68,6 @@ pub fn Camera(cam: CameraOptions, w: u8, h: u8) type {
 
 pub fn Cursor(cur: CursorOptions, w: u8, h: u8) type {
     return struct {
-        const width = w;
-        const height = h;
         x: UFits(w) = cur.init_x,
         y: UFits(h) = cur.init_y,
     };
