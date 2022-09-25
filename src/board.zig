@@ -87,8 +87,8 @@ pub fn Board(
         pub const width = w;
         pub const height = h;
 
-        tiles: [width][height]Tile_data
-            = [_][height]Tile_data{ [_]Tile_data{ 0 } ** height } ** width,
+        tiles: [height][width]Tile_data
+            = [_][width]Tile_data{ [_]Tile_data{ 0 } ** width } ** height,
 
         const TileIterConst = struct {
             ptr: *const Self,
@@ -99,20 +99,19 @@ pub fn Board(
                 tile: Tile_data, x: u8, y: u8,
             };
             pub fn next(self: *@This()) ?Entry {
+                if ( self.y >= height ) {
+                    return null;
+                }
                 const ret = .{
-                    .tile = self.ptr.tiles[self.x][self.y],
+                    .tile = self.ptr.tiles[self.y][self.x],
                     .x = self.x,
                     .y = self.y,
                 };
                 if ( self.x + 1 < width ) {
                     self.*.x += 1;
                 } else {
-                    if ( self.y + 1 < height ) {
-                        self.*.x = 0;
-                        self.*.y += 1;
-                    } else {
-                        return null;
-                    }
+                    self.*.x = 0;
+                    self.*.y += 1;
                 }
                 return ret;
             }
@@ -131,20 +130,19 @@ pub fn Board(
                 tile: *const Tile_data, x: u8, y: u8,
             };
             pub fn next(self: *@This()) ?Entry {
+                if ( self.y >= height ) {
+                    return null;
+                }
                 const ret = .{
-                    .tile = &self.ptr.tiles[self.x][self.y],
+                    .tile = &self.ptr.tiles[self.y][self.x],
                     .x = self.x,
                     .y = self.y,
                 };
                 if ( self.x + 1 < width ) {
                     self.*.x += 1;
                 } else {
-                    if ( self.y + 1 < height ) {
-                        self.*.x = 0;
-                        self.*.y += 1;
-                    } else {
-                        return null;
-                    }
+                    self.*.x = 0;
+                    self.*.y += 1;
                 }
                 return ret;
             }
@@ -163,6 +161,9 @@ pub fn Board(
                 tile: *Tile_data, x: u8, y: u8,
             };
             pub fn next(self: *@This()) ?Entry {
+                if ( self.y >= height ) {
+                    return null;
+                }
                 const ret = .{
                     .tile = &self.ptr.tiles[self.x][self.y],
                     .x = self.x,
@@ -171,12 +172,8 @@ pub fn Board(
                 if ( self.x + 1 < width ) {
                     self.*.x += 1;
                 } else {
-                    if ( self.y + 1 < height ) {
-                        self.*.x = 0;
-                        self.*.y += 1;
-                    } else {
-                        return null;
-                    }
+                    self.*.x = 0;
+                    self.*.y += 1;
                 }
                 return ret;
             }
