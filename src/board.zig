@@ -1,50 +1,8 @@
 const std = @import("std");
 const testing = std.testing;
 
-fn cassert(comptime ok: bool, comptime err: []const u8) void {
-    if (!ok) @compileError(err);
-}
-
-fn ufits(i: usize) u16 {
-    return @clz(u32, @as(usize, 0)) - @clz(u32, i);
-}
-
-fn UFits(i: usize) type {
-    const bits = ufits(i);
-    return @Type(.{ .Int = .{
-        .signedness = .unsigned,
-        .bits = bits,
-    }});
-}
-
-test "UFits hardcoded" {
-    try testing.expectEqual(u0, UFits(0));
-    try testing.expectEqual(u1, UFits(1));
-    try testing.expectEqual(u2, UFits(2));
-    try testing.expectEqual(u3, UFits(4));
-    try testing.expectEqual(u7, UFits(0x7F));
-    try testing.expectEqual(u8, UFits(0x80));
-}
-
-test "UFits up until u16" {
-    const u_max = u16;
-    var i = @as(u_max, 0);
-    var bits = @as(u16, 0);
-    var next_inc = @as(u_max, 1);
-    while ( true ) {
-        try testing.expectEqual(bits, ufits(i));
-
-        // std.debug.print("0x{x:0>4}: {d} bits\n", .{ i, bits });
-        if ( @addWithOverflow(u_max, i, 1, &i) ) {
-            break;
-        } else {
-            if ( i == next_inc ) {
-                bits += 1;
-                next_inc = next_inc << 1;
-            }
-        }
-    }
-}
+const utils = @import("utils.zig");
+const UFits = utils.UFits;
 
 pub const CameraOptions = struct {
     screen_width: u8,
@@ -82,8 +40,10 @@ pub fn Board(
         pub const width = w;
         pub const height = h;
 
+        const init = if ( utils.isInt(Tile_data) ) 0
+            else Tile_data{};
         tiles: [height][width]Tile_data
-            = [_][width]Tile_data{ [_]Tile_data{ 0 } ** width } ** height,
+            = [_][width]Tile_data{ [_]Tile_data{ init } ** width } ** height,
 
         const TileIterConst = struct {
             ptr: *const Self,
@@ -183,16 +143,12 @@ pub fn Board(
 test "Board example" {
     const width = 4;
     const height = 4;
-    const a = Board(void, void, width, height, .{
-        .use_camera = if (true) .{
-            .screen_width = 2,
-            .screen_height = 2,
-        } else null,
-    }){
-        .data = void{},
-        .tiles = [_][height]void{ [_]void{ void{} } ** height } ** width,
-    };
-    _ = a;
+    const withVoid = Board(void, width, height){};
+    const withInt = Board(u8, width, height){};
+    const withStruct = Board(struct{ int: u8 = 1 }, width, height){};
+    _ = withVoid;
+    _ = withInt;
+    _ = withStruct;
 }
 
 pub const Button = enum(u8) {

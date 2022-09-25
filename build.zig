@@ -18,6 +18,7 @@ pub fn build(b: *std.build.Builder) !void {
 
     // TODO: look for an entire folder
     const files = [_][]const u8{
+        "src/utils.zig",
         "src/board.zig",
     };
     const test_step = b.step("test", "Run all tests");
