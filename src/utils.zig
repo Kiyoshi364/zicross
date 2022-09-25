@@ -9,8 +9,8 @@ pub fn todo() void {
     @panic("TODO: Not implemented!");
 }
 
-pub fn ctodo() void {
-    @compileError("CTODO: Comptime not implemented!");
+pub inline fn ctodo() void {
+    comptime todo();
 }
 
 pub fn ufits(i: usize) u16 {
@@ -87,16 +87,13 @@ test "UFitsUp hardcoded" {
     try testing.expectEqual(u32, UFitsUp(0x10000));
 }
 
-pub const TypeInfoEnum = @typeInfo(std.builtin.TypeInfo).Union.tag_type.?;
-
 pub fn isInt(comptime T: type) bool {
-    return @as(TypeInfoEnum, @typeInfo(T)) == .Int;
+    return @typeInfo(T) == .Int;
 }
 
 pub fn isUint(comptime T: type) bool {
     const info = @typeInfo(T);
-    const tag = @as(TypeInfoEnum, info);
-    return tag == .Int and info.Int.signedness == .unsigned;
+    return info == .Int and info.Int.signedness == .unsigned;
 }
 
 test "It compiles!" {
