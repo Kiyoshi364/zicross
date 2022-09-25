@@ -1,5 +1,6 @@
 const w4 = @import("wasm4.zig");
 
+const pg = @import("pure_garbage.zig");
 const game = @import("game.zig");
 
 const Input = game.Input;

@@ -9,6 +9,10 @@ pub fn todo() void {
     @panic("TODO: Not implemented!");
 }
 
+pub fn ctodo() void {
+    @compileError("CTODO: Comptime not implemented!");
+}
+
 pub fn ufits(i: usize) u16 {
     return @clz(u32, @as(usize, 0)) - @clz(u32, i);
 }
