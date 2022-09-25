@@ -106,18 +106,14 @@ pub fn update(oldstate: State, input: Input) State {
 
         switch ( button1 ) {
             .Released => {},
-            .Pressed => {
-                w4.trace("A1");
-            },
+            .Pressed => {},
             .Unpressed => {},
             .Held => {},
         }
 
         switch ( button2 ) {
             .Released => {},
-            .Pressed => {
-                w4.trace("B2");
-            },
+            .Pressed => {},
             .Unpressed => {},
             .Held => {},
         }
@@ -132,6 +128,7 @@ pub fn update(oldstate: State, input: Input) State {
 pub fn draw(state: State) void {
     drawTiles(state.board, state.camera);
     drawCursor(state.camera, state.cursor);
+    drawInputs(state.gpads[0]);
 }
 
 fn drawCursor(camera: Camera, cursor: Cursor) void {
@@ -170,5 +167,18 @@ fn drawTiles(board: Board, cam: Camera) void {
         const x = tilesize * (@as(i32, triple.x) - @as(i32, offx));
         const y = tilesize * (@as(i32, triple.y) - @as(i32, offy));
         w4.rect(x, y, tilesize, tilesize);
+    }
+}
+
+fn drawInputs(pad: u8) void {
+    const initx = 2;
+    const scalex = 8;
+    const y = 2;
+    const chars = " \x80\x81\x82\x83\x84\x85\x86\x87";
+    var i = @as(u4, 0);
+    while ( i < 8 ) : ( i += 1 ) {
+        const mask = (pad >> @intCast(u3, i)) & 1;
+        const key = mask * (i + 1);
+        w4.text(chars[key..key+1], initx + scalex * @as(i32, i), y);
     }
 }
