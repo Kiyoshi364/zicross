@@ -5,12 +5,12 @@ pub fn cassert(comptime ok: bool, comptime err: []const u8) void {
     if (!ok) @compileError(err);
 }
 
-pub fn todo() void {
+pub inline fn todo() noreturn {
     @panic("TODO: Not implemented!");
 }
 
-pub inline fn ctodo() void {
-    comptime todo();
+pub inline fn ctodo() noreturn {
+    @compileError("Comptime TODO: Not implemented!");
 }
 
 pub fn ufits(i: usize) u16 {
