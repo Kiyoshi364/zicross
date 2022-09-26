@@ -16,13 +16,36 @@ pub fn build(b: *std.build.Builder) !void {
 
     lib.install();
 
-    // TODO: look for an entire folder
-    const files = [_][]const u8{
-        "src/utils.zig",
-        "src/board.zig",
-    };
     const test_step = b.step("test", "Run all tests");
-    for (files) |file| {
-        test_step.dependOn(&b.addTest(file).step);
+    try testFilesFromDir(b, test_step, "src",
+        &[_][]const u8{
+            "main.zig",
+            "wasm4.zig",
+        });
+}
+
+fn testFilesFromDir(
+        b: *std.build.Builder,
+        test_step: *std.build.Step,
+        dirpath: []const u8,
+        ignores: []const []const u8
+) !void {
+    const cwd = std.fs.cwd();
+    const itdir = try cwd.openIterableDir(dirpath, .{});
+    var iter = itdir.iterate();
+    while ( try iter.next() ) |entry| {
+        switch ( entry.kind ) {
+            .File => blk: {
+                for ( ignores ) |ig| {
+                    if ( std.mem.eql(u8, ig, entry.name) ) break :blk;
+                }
+                const filename
+                    = try itdir.dir.realpathAlloc(b.allocator,
+                        entry.name);
+                defer b.allocator.free(filename);
+                test_step.dependOn(&b.addTest(filename).step);
+            },
+            else => {},
+        }
     }
 }
