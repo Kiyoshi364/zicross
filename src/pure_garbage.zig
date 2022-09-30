@@ -225,9 +225,8 @@ pub fn PG(comptime config: Config) type {
             };
         }
 
-        pub fn create(self: *Self,
-                comptime T: type, tinfo: TypeInfo, thing: T) !Ptr(T) {
-            assert( typeCheck(T, tinfo) );
+        pub fn unsafeCreate(self: *Self,
+                tinfo: TypeInfo, thing: *anyopaque) !Ptr(anyopaque) {
             const base = calcBase(
                 self.curr_end, tinfo, config.padding);
             assert( base.end < blen );
@@ -239,11 +238,18 @@ pub fn PG(comptime config: Config) type {
             header.writeBefore(buf, base.begin);
             const thing_size = tinfo.size();
             const thing_slice
-                = @intToPtr([*]const u8, @ptrToInt(&thing))
+                = @intToPtr([*]const u8, @ptrToInt(thing))
                     [0..thing_size];
             std.mem.copy(u8, buf[base.begin..base.end], thing_slice);
             self.curr_end = base.end;
-            return Ptr(T).fromIndex(base.begin);
+            return Ptr(anyopaque).fromIndex(base.begin);
+        }
+
+        pub fn create(self: *Self,
+                comptime T: type, tinfo: TypeInfo, thing: T) !Ptr(T) {
+            assert( typeCheck(T, tinfo) );
+            const ptr = try self.unsafeCreate(tinfo, &thing);
+            return Ptr(T).fromIndex(ptr.toIndex());
         }
 
         pub fn deref(self: *const Self,
