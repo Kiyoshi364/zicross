@@ -16,7 +16,7 @@ pub const CursorOptions = struct {
     init_y: u8 = 0,
 };
 
-pub fn Camera(cam: CameraOptions, w: u8, h: u8) type {
+pub fn Camera(comptime cam: CameraOptions, comptime w: u8, comptime h: u8) type {
     return struct {
         pub const opts = cam;
         offx: UFits(w) = 0,
@@ -24,7 +24,7 @@ pub fn Camera(cam: CameraOptions, w: u8, h: u8) type {
     };
 }
 
-pub fn Cursor(cur: CursorOptions, w: u8, h: u8) type {
+pub fn Cursor(comptime cur: CursorOptions, comptime w: u8, comptime h: u8) type {
     return struct {
         x: UFits(w) = cur.init_x,
         y: UFits(h) = cur.init_y,
@@ -33,7 +33,7 @@ pub fn Cursor(cur: CursorOptions, w: u8, h: u8) type {
 
 pub fn Board(
         comptime Tile_data: type,
-        w: u8, h: u8,
+        comptime w: u8, comptime h: u8,
 ) type {
     return struct {
         const Self = @This();

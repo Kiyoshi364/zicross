@@ -69,13 +69,13 @@ pub fn PG(comptime config: Config) type {
                     buf: []u8, index: Index) void {
                 const begin = index - size;
                 const self_slice
-                    = @as([]const u8, @ptrCast(*[size]u8, self));
+                    = @as([]const u8, @ptrCast(*const [size]u8, self));
                 std.mem.copy(u8, buf[begin..index], self_slice);
             }
 
             fn readBefore(buf: []const u8, index: Index) Header {
                 const begin = index - size;
-                return @ptrCast(*Header, &buf[begin]).*;
+                return @ptrCast(*align(1) const Header, &buf[begin]).*;
             }
         };
 
@@ -130,7 +130,7 @@ pub fn PG(comptime config: Config) type {
         }
 
         fn typeInfoStruct(comptime T: type,
-                comptime stct: std.builtin.TypeInfo.Struct) TypeInfo {
+                comptime stct: std.builtin.Type.Struct) TypeInfo {
             if ( stct.layout != .Packed ) {
                 @compileError("Non-packet struct not supported: "
                     ++ @typeName(T));
@@ -226,7 +226,7 @@ pub fn PG(comptime config: Config) type {
         }
 
         pub fn unsafeCreate(self: *Self,
-                tinfo: TypeInfo, thing: *anyopaque) !Ptr(anyopaque) {
+                tinfo: TypeInfo, thing: *const anyopaque) !Ptr(anyopaque) {
             const base = calcBase(
                 self.curr_end, tinfo, config.padding);
             assert( base.end < blen );
@@ -248,19 +248,19 @@ pub fn PG(comptime config: Config) type {
         pub fn create(self: *Self,
                 comptime T: type, tinfo: TypeInfo, thing: T) !Ptr(T) {
             assert( typeCheck(T, tinfo) );
-            const ptr = try self.unsafeCreate(tinfo, &thing);
+            const ptr = try self.unsafeCreate(tinfo, @ptrCast(*const anyopaque, &thing));
             return Ptr(T).fromIndex(ptr.toIndex());
         }
 
         pub fn deref(self: *const Self,
-                ref: anytype) *const @TypeOf(ref).typ {
+                ref: anytype) *align(1) const @TypeOf(ref).typ {
             const T = @TypeOf(ref).typ;
             const buf = self.active_buf_const();
             const index = ref.toIndex();
             const tinfo = Header.readBefore(buf, index).info;
             assert( index + tinfo.size() <= self.curr_end );
             const thing_ptr = &buf[index];
-            return @ptrCast(*const T, thing_ptr);
+            return @ptrCast(*align(1) const T, thing_ptr);
         }
 
         fn active_buf(self: *Self) []u8 {

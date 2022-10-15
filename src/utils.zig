@@ -14,10 +14,10 @@ pub inline fn ctodo() noreturn {
 }
 
 pub fn ufits(i: usize) u16 {
-    return @clz(u32, @as(usize, 0)) - @clz(u32, i);
+    return @clz(@as(usize, 0)) - @clz(i);
 }
 
-pub fn UFits(i: usize) type {
+pub fn UFits(comptime i: usize) type {
     const bits = ufits(i);
     return @Type(.{ .Int = .{
         .signedness = .unsigned,
@@ -66,7 +66,7 @@ pub fn ufitsUp(i: usize) u16 {
     };
 }
 
-pub fn UFitsUp(i: usize) type {
+pub fn UFitsUp(comptime i: usize) type {
     const bits = ufitsUp(i);
     return @Type(.{ .Int = .{
         .signedness = .unsigned,
