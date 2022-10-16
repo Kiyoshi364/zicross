@@ -111,6 +111,9 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
         }
 
         pub fn typeInfoFn(comptime T: type) ?TypeInfo {
+            if ( @sizeOf(T) == 0 ) {
+                return .{ .data = 0, .ptr = 0, };
+            }
             const info = @typeInfo(T);
             return switch (info) {
                 .Int => |int| .{
@@ -229,6 +232,9 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
 
         pub fn unsafeCreate(self: *Self,
                 tinfo: TypeInfo, thing: *const anyopaque) !Ptr(anyopaque) {
+            if ( tinfo.size() == 0 ) {
+                return @as(Ptr(anyopaque), undefined);
+            }
             const base = calcBase(
                 self.curr_end, tinfo, config.padding);
             assert( base.end < blen );
