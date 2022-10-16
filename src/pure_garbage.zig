@@ -117,81 +117,88 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
                     .data = (int.bits + 7) / 8,
                     .ptr = 0,
                 },
-                .Struct => null,
-                    // |stct| typeInfoStruct(T, stct),
+                .Struct => |stct| typeInfoPackedStruct(T, stct),
                 else => @compileError(
                     "Unsupported type: " ++ @typeName(T) ),
             };
         }
 
-        fn typeInfoStruct(comptime T: type,
+        fn typeInfoPackedStruct(comptime T: type,
                 comptime stct: std.builtin.Type.Struct) TypeInfo {
             if ( stct.layout != .Packed ) {
                 @compileError("Non-packet struct not supported: "
                     ++ @typeName(T));
             }
             comptime {
-            var highest_data = @as(?config.Data_tinfo, null);
-            var high_data_name = @as([]const u8, undefined);
-            var lowest_ptr = @as(?config.Data_tinfo, null);
-            var low_ptr_name = @as([]const u8, undefined);
-            inline for (stct.fields) |field| {
-                const f_type = field.field_type;
-                const addr = @bitOffsetOf(T, field.name);
-                if ( isPtr(f_type) ) {
-                    if ( lowest_ptr ) |low| {
-                        if ( addr < low ) {
-                            lowest_ptr = addr;
+                var highest_data = @as(?config.Data_tinfo, null);
+                var high_data_name = @as([]const u8, undefined);
+                var lowest_ptr = @as(?config.Ptr_tinfo, null);
+                var low_ptr_name = @as([]const u8, undefined);
+                var highest_ptr = @as(?config.Ptr_tinfo, null);
+                inline for (stct.fields) |field| {
+                    const f_type = field.field_type;
+                    const addrBegin = @bitOffsetOf(T, field.name);
+                    const addrEnd = addrBegin + @bitSizeOf(f_type);
+                    if ( isPtr(f_type) ) {
+                        if ( lowest_ptr ) |low| {
+                            if ( addrBegin < low ) {
+                                lowest_ptr = addrBegin;
+                                low_ptr_name = field.name;
+                            }
+                            assert( highest_ptr != null );
+                            if ( highest_ptr.? < addrEnd ) {
+                                highest_ptr = addrEnd;
+                            }
+                        } else {
+                            lowest_ptr = addrBegin;
                             low_ptr_name = field.name;
+                            assert( highest_ptr == null );
+                            highest_ptr = addrEnd;
+                        }
+                        if ( highest_data ) |high| {
+                            if ( high < lowest_ptr.? ) {
+                                @compileError(
+                                    "Struct fields are not ordered: `"
+                                    ++ low_ptr_name
+                                    ++ "` starts before `"
+                                    ++ high_data_name ++ "`");
+                            }
                         }
                     } else {
-                        lowest_ptr = addr;
-                        low_ptr_name = field.name;
-                    }
-                    if ( highest_data ) |high| {
-                        if ( high < lowest_ptr.? ) {
-                            @compileError(
-                                "Struct fields are not ordered: `"
-                                ++ low_ptr_name
-                                ++ "` starts before `"
-                                ++ high_data_name ++ "`");
-                        }
-                    }
-                } else {
-                    const addr2 = addr + @bitSizeOf(f_type);
-                    if ( highest_data ) |high| {
-                        if ( addr > high ) {
-                            highest_data = addr2;
+                        if ( highest_data ) |high| {
+                            if ( addrEnd > high ) {
+                                highest_data = addrEnd;
+                                high_data_name = field.name;
+                            }
+                        } else {
+                            highest_data = addrEnd;
                             high_data_name = field.name;
                         }
-                    } else {
-                        highest_data = addr2;
-                        high_data_name = field.name;
-                    }
-                    if ( lowest_ptr ) |low| {
-                        if ( highest_data.? < low ) {
-                            @compileError(
-                                "Struct fields are not ordered: `"
-                                ++ low_ptr_name
-                                ++ "` starts before `"
-                                ++ high_data_name ++ "`");
+                        if ( lowest_ptr ) |low| {
+                            if ( highest_data.? < low ) {
+                                @compileError(
+                                    "Struct fields are not ordered: `"
+                                    ++ low_ptr_name
+                                    ++ "` starts before `"
+                                    ++ high_data_name ++ "`");
+                            }
                         }
                     }
                 }
-            }
-            if ( lowest_ptr ) |low| {
-                assert( low % 8 == 0 );
-                const data = @divExact(low, 8);
-                return .{
-                    .data = data,
-                    .ptr = @sizeOf(T) - data,
-                };
-            } else {
-                return .{
-                    .data = @sizeOf(T),
-                    .ptr = 0,
-                };
-            }
+                if ( lowest_ptr ) |low| {
+                    assert( low % 8 == 0 );
+                    const data = @divExact(low, 8);
+                    const ptr = @divExact(highest_ptr.?, 8) - data;
+                    return .{
+                        .data = data,
+                        .ptr = ptr,
+                    };
+                } else {
+                    return .{
+                        .data = @sizeOf(T),
+                        .ptr = 0,
+                    };
+                }
             }
         }
 
@@ -269,6 +276,32 @@ fn print(buf: []u8) void {
             sep, c,
         });
     }
+}
+
+test "typeInfoPackedStruct" {
+    const PB = PureBuffer(.{});
+    const C = packed struct {
+        int8: i8 = -1,
+        uint16: u16 = 0x0304,
+        int8_2: i8 = -2,
+    };
+    const D = packed struct {
+        int8: i8 = -3,
+        ref: PB.Ptr(C),
+    };
+    const expCtinfo = PB.TypeInfo{
+        .data = 4,
+        .ptr = 0,
+    };
+    const expDtinfo = PB.TypeInfo{
+        .data = 1,
+        .ptr = 2,
+    };
+
+    const ctinfo = PB.typeInfoPackedStruct(C, @typeInfo(C).Struct);
+    const dtinfo = PB.typeInfoPackedStruct(D, @typeInfo(D).Struct);
+    try testing.expectEqual(expCtinfo, ctinfo);
+    try testing.expectEqual(expDtinfo, dtinfo);
 }
 
 test "PureBuffer Example" {
