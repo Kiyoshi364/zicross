@@ -14,9 +14,8 @@ pub const Padding = enum {
     none, infered, manual
 };
 
-pub const Config = struct {
+pub const BufferConfig = struct {
     blen: usize = 1024,
-    bcnt: usize = 3,
 
     Data_tinfo: type = u8,
     Ptr_tinfo: type = u8,
@@ -25,13 +24,10 @@ pub const Config = struct {
     padding: Padding = .none,
 };
 
-pub fn PG(comptime config: Config) type {
+pub fn PureBuffer(comptime config: BufferConfig) type {
     const blen = config.blen;
-    const bcnt = config.bcnt;
-    const BufIndex = utils.UFitsUp(bcnt);
     const Index = utils.UFitsUp(blen);
     const FrameCnt = utils.UFitsUp(blen);
-    cassert( bcnt >= 3, "bcnt must be at least 3");
     cassert( utils.isUint(config.Data_tinfo),
         "Data_tinfo must be an uint type");
     cassert( utils.isUint(config.Ptr_tinfo),
@@ -50,12 +46,11 @@ pub fn PG(comptime config: Config) type {
         .relPtr => utils.ctodo(),
     };
     return struct {
-        curr_buf: BufIndex = 0,
         curr_end: Index = 0,
         curr_frame: FrameCnt = 0,
         /// how many frames are stored at the back of the buffer
-        frameCnt: [bcnt]FrameCnt = .{ 0 } ** bcnt,
-        buffers: [bcnt][blen]u8 = .{ .{ 0 } ** blen} ** bcnt,
+        frameCnt: FrameCnt = 0,
+        buffer: [blen]u8 = .{ 0 } ** blen,
 
         const Self = @This();
 
@@ -230,7 +225,7 @@ pub fn PG(comptime config: Config) type {
             const base = calcBase(
                 self.curr_end, tinfo, config.padding);
             assert( base.end < blen );
-            const buf = self.active_buf();
+            const buf = &self.buffer;
             const header = Header{
                 .frame = self.curr_frame,
                 .info = tinfo,
@@ -255,20 +250,12 @@ pub fn PG(comptime config: Config) type {
         pub fn deref(self: *const Self,
                 ref: anytype) *align(1) const @TypeOf(ref).typ {
             const T = @TypeOf(ref).typ;
-            const buf = self.active_buf_const();
+            const buf = &self.buffer;
             const index = ref.toIndex();
             const tinfo = Header.readBefore(buf, index).info;
             assert( index + tinfo.size() <= self.curr_end );
             const thing_ptr = &buf[index];
             return @ptrCast(*align(1) const T, thing_ptr);
-        }
-
-        fn active_buf(self: *Self) []u8 {
-            return &self.buffers[self.curr_buf];
-        }
-
-        fn active_buf_const(self: *const Self) []const u8 {
-            return &self.buffers[self.curr_buf];
         }
     };
 }
@@ -284,9 +271,9 @@ fn print(buf: []u8) void {
     }
 }
 
-test "PG Example" {
-    const GC = PG(.{});
-    var gc = GC{
+test "PureBuffer Example" {
+    const PB = PureBuffer(.{});
+    var pb = PB{
         .curr_frame = 0x0107,
     };
     const a = @as(u8, 35);
@@ -300,14 +287,14 @@ test "PG Example" {
     };
     const c = C{};
 
-    const aref = try gc.create(A, gc.typeInfo(A), a);
-    const aptr = gc.deref(aref);
+    const aref = try pb.create(A, pb.typeInfo(A), a);
+    const aptr = pb.deref(aref);
     try testing.expectEqual(a, aptr.*);
 
-    const buf = gc.active_buf();
+    const buf = &pb.buffer;
 
-    const bref = try gc.create(B, gc.typeInfo(B), b);
-    const bptr = gc.deref(bref);
+    const bref = try pb.create(B, pb.typeInfo(B), b);
+    const bptr = pb.deref(bref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqual(b, bptr.*);
 
@@ -316,16 +303,16 @@ test "PG Example" {
         .data = 4,
         .ptr = 0,
     };
-    // const ctinfo = gc.typeInfo(C);
-    const cref = try gc.create(C, ctinfo, c);
-    const cptr = gc.deref(cref);
+    // const ctinfo = pb.typeInfo(C);
+    const cref = try pb.create(C, ctinfo, c);
+    const cptr = pb.deref(cref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqual(b, bptr.*);
     try testing.expectEqual(c, cptr.*);
 
     const D = packed struct {
         int8: i8 = -3,
-        ref: GC.Ptr(C),
+        ref: PB.Ptr(C),
     };
     const d = D{ .ref = cref };
 
@@ -335,9 +322,9 @@ test "PG Example" {
         .data = 1,
         .ptr = 2,
     };
-    // const dtinfo = gc.typeInfo(D);
-    const dref = try gc.create(D, dtinfo, d);
-    const dptr = gc.deref(dref);
+    // const dtinfo = pb.typeInfo(D);
+    const dref = try pb.create(D, dtinfo, d);
+    const dptr = pb.deref(dref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqual(b, bptr.*);
     try testing.expectEqual(c, cptr.*);
@@ -352,8 +339,8 @@ test "PG Example" {
     std.debug.print("c: {} {*}\n", .{ cref.toIndex(), cptr});
     std.debug.print("d: {} {*}\n", .{ dref.toIndex(), dptr});
 
-    const b2ref = try gc.create(B, gc.typeInfo(B), b);
-    const b2ptr = gc.deref(b2ref);
+    const b2ref = try pb.create(B, pb.typeInfo(B), b);
+    const b2ptr = pb.deref(b2ref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqual(b, bptr.*);
     try testing.expectEqual(b, b2ptr.*);
