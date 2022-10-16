@@ -247,11 +247,15 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
             return Ptr(anyopaque).fromIndex(base.begin);
         }
 
-        pub fn create(self: *Self,
+        pub fn explicitCreate(self: *Self,
                 comptime T: type, tinfo: TypeInfo, thing: T) !Ptr(T) {
             assert( typeCheck(T, tinfo) );
             const ptr = try self.unsafeCreate(tinfo, @ptrCast(*const anyopaque, &thing));
             return Ptr(T).fromIndex(ptr.toIndex());
+        }
+
+        pub fn create(self: *Self, comptime T: type, thing: T) !Ptr(T) {
+            return self.explicitCreate(T, typeInfoFn(T).?, thing);
         }
 
         pub fn deref(self: *const Self,
@@ -329,21 +333,20 @@ test "PureBuffer Example" {
 
     const copy = std.mem.copy;
     copy(u8, test_buffer[0..5], &.{ 7, 1, 1, 0, 35 });
-    const aref = try pb.create(A, pb.typeInfo(A), a);
+    const aref = try pb.create(A, a);
     const aptr = pb.deref(aref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqualSlices(u8, &test_buffer, buf);
 
     copy(u8, test_buffer[5..11], &.{ 7, 1, 2, 0, 2, 1 });
-    const bref = try pb.create(B, pb.typeInfo(B), b);
+    const bref = try pb.create(B, b);
     const bptr = pb.deref(bref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqual(b, bptr.*);
     try testing.expectEqualSlices(u8, &test_buffer, buf);
 
     copy(u8, test_buffer[11..19], &.{ 7, 1, 4, 0, 255, 4, 3, 254 });
-    const ctinfo = pb.typeInfo(C);
-    const cref = try pb.create(C, ctinfo, c);
+    const cref = try pb.create(C, c);
     const cptr = pb.deref(cref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqual(b, bptr.*);
@@ -353,8 +356,7 @@ test "PureBuffer Example" {
     const d = D{ .ref = cref };
 
     copy(u8, test_buffer[19..26], &.{ 7, 1, 1, 2, 253, 15, 0 });
-    const dtinfo = pb.typeInfo(D);
-    const dref = try pb.create(D, dtinfo, d);
+    const dref = try pb.create(D, d);
     const dptr = pb.deref(dref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqual(b, bptr.*);
@@ -363,7 +365,7 @@ test "PureBuffer Example" {
     try testing.expectEqualSlices(u8, &test_buffer, buf);
 
     std.mem.copy(u8, test_buffer[26..32], &.{ 7, 1, 2, 0, 2, 1 });
-    const b2ref = try pb.create(B, pb.typeInfo(B), b);
+    const b2ref = try pb.create(B, b);
     const b2ptr = pb.deref(b2ref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqual(b, bptr.*);
