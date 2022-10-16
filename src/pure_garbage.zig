@@ -230,14 +230,18 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
             };
         }
 
-        pub fn unsafeCreate(self: *Self,
-                tinfo: TypeInfo, thing: *const anyopaque) !Ptr(anyopaque) {
+        pub const CreateError = error { OutOfMemory };
+
+        pub fn unsafeCreate(self: *Self, tinfo: TypeInfo,
+                thing: *const anyopaque) CreateError!Ptr(anyopaque) {
             if ( tinfo.size() == 0 ) {
                 return @as(Ptr(anyopaque), undefined);
             }
             const base = calcBase(
                 self.curr_end, tinfo, config.padding);
-            assert( base.end < blen );
+            if( base.end >= blen ) {
+                return CreateError.OutOfMemory;
+            }
             const buf = &self.buffer;
             const header = Header{
                 .frame = self.curr_frame,
@@ -253,15 +257,16 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
             return Ptr(anyopaque).fromIndex(base.begin);
         }
 
-        pub fn explicitCreate(self: *Self,
-                comptime T: type, tinfo: TypeInfo, thing: T) !Ptr(T) {
+        pub fn explicitCreate(self: *Self, comptime T: type,
+                tinfo: TypeInfo, thing: T) CreateError!Ptr(T) {
             assert( typeCheck(T, tinfo) );
             const ptr = try self.unsafeCreate(tinfo, @ptrCast(*const anyopaque, &thing));
             return Ptr(T).fromIndex(ptr.toIndex());
         }
 
-        pub fn create(self: *Self, comptime T: type, thing: T) !Ptr(T) {
-            return self.explicitCreate(T, typeInfoFn(T).?, thing);
+        pub fn create(self: *Self,
+                comptime T: type, thing: T) CreateError!Ptr(T) {
+            return self.explicitCreate(T, self.typeInfo(T), thing);
         }
 
         pub fn deref(self: *const Self,
