@@ -306,9 +306,12 @@ test "typeInfoPackedStruct" {
 
 test "PureBuffer Example" {
     const PB = PureBuffer(.{});
+    var test_buffer = [_]u8{0} ** 1024;
     var pb = PB{
         .curr_frame = 0x0107,
     };
+    const buf = &pb.buffer;
+
     const a = @as(u8, 35);
     const A = @TypeOf(a);
     const b = @as(u16, 0x0102);
@@ -319,59 +322,47 @@ test "PureBuffer Example" {
         int8_2: i8 = -2,
     };
     const c = C{};
+    const D = packed struct {
+        int8: i8 = -3,
+        ref: PB.Ptr(C),
+    };
 
+    const copy = std.mem.copy;
+    copy(u8, test_buffer[0..5], &.{ 7, 1, 1, 0, 35 });
     const aref = try pb.create(A, pb.typeInfo(A), a);
     const aptr = pb.deref(aref);
     try testing.expectEqual(a, aptr.*);
+    try testing.expectEqualSlices(u8, &test_buffer, buf);
 
-    const buf = &pb.buffer;
-
+    copy(u8, test_buffer[5..11], &.{ 7, 1, 2, 0, 2, 1 });
     const bref = try pb.create(B, pb.typeInfo(B), b);
     const bptr = pb.deref(bref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqual(b, bptr.*);
+    try testing.expectEqualSlices(u8, &test_buffer, buf);
 
-    // TODO: fix typeInfoStruct
-    const ctinfo = .{
-        .data = 4,
-        .ptr = 0,
-    };
-    // const ctinfo = pb.typeInfo(C);
+    copy(u8, test_buffer[11..19], &.{ 7, 1, 4, 0, 255, 4, 3, 254 });
+    const ctinfo = pb.typeInfo(C);
     const cref = try pb.create(C, ctinfo, c);
     const cptr = pb.deref(cref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqual(b, bptr.*);
     try testing.expectEqual(c, cptr.*);
+    try testing.expectEqualSlices(u8, &test_buffer, buf);
 
-    const D = packed struct {
-        int8: i8 = -3,
-        ref: PB.Ptr(C),
-    };
     const d = D{ .ref = cref };
 
-
-    // TODO: fix typeInfoStruct
-    const dtinfo = .{
-        .data = 1,
-        .ptr = 2,
-    };
-    // const dtinfo = pb.typeInfo(D);
+    copy(u8, test_buffer[19..26], &.{ 7, 1, 1, 2, 253, 15, 0 });
+    const dtinfo = pb.typeInfo(D);
     const dref = try pb.create(D, dtinfo, d);
     const dptr = pb.deref(dref);
     try testing.expectEqual(a, aptr.*);
     try testing.expectEqual(b, bptr.*);
     try testing.expectEqual(c, cptr.*);
     try testing.expectEqual(d, dptr.*);
+    try testing.expectEqualSlices(u8, &test_buffer, buf);
 
-    std.debug.print("\n", .{});
-    print(buf[0..0x28]);
-    std.debug.print("\n", .{});
-    std.debug.print("buff: {*}\n", .{ buf });
-    std.debug.print("a: {} {*}\n", .{ aref.toIndex(), aptr});
-    std.debug.print("b: {} {*}\n", .{ bref.toIndex(), bptr});
-    std.debug.print("c: {} {*}\n", .{ cref.toIndex(), cptr});
-    std.debug.print("d: {} {*}\n", .{ dref.toIndex(), dptr});
-
+    std.mem.copy(u8, test_buffer[26..32], &.{ 7, 1, 2, 0, 2, 1 });
     const b2ref = try pb.create(B, pb.typeInfo(B), b);
     const b2ptr = pb.deref(b2ref);
     try testing.expectEqual(a, aptr.*);
@@ -379,16 +370,7 @@ test "PureBuffer Example" {
     try testing.expectEqual(b, b2ptr.*);
     try testing.expectEqual(c, cptr.*);
     try testing.expectEqual(d, dptr.*);
-
-    std.debug.print("\n", .{});
-    print(buf[0..0x28]);
-    std.debug.print("\n", .{});
-    std.debug.print("buff: {*}\n", .{ buf });
-    std.debug.print("a: {} {*}\n", .{ aref.toIndex(), aptr});
-    std.debug.print("b: {} {*}\n", .{ bref.toIndex(), bptr});
-    std.debug.print("c: {} {*}\n", .{ cref.toIndex(), cptr});
-    std.debug.print("d: {} {*}\n", .{ dref.toIndex(), dptr});
-    std.debug.print("b2: {} {*}\n", .{ b2ref.toIndex(), bptr});
+    try testing.expectEqualSlices(u8, &test_buffer, buf);
 }
 
 test "It compiles!" {
