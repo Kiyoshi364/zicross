@@ -58,21 +58,31 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
             frame: FrameCnt,
             info: TypeInfo,
 
-            const size = @sizeOf(Header);
-
             fn writeBefore(self: *const Header,
                     buf: []u8, index: Index) void {
-                const begin = index - size;
-                const self_slice
-                    = @as([]const u8, @ptrCast(*const [size]u8, self));
-                std.mem.copy(u8, buf[begin..index], self_slice);
+                utils.writeBefore(Header, self, buf, index);
             }
 
             fn readBefore(buf: []const u8, index: Index) Header {
-                const begin = index - size;
-                return @ptrCast(*align(1) const Header, &buf[begin]).*;
+                return utils.readBefore(Header, buf, index);
             }
         };
+
+        fn Frame(comptime T: type) type {
+            return struct {
+                frame: FrameCnt,
+                ptr: Ptr(T),
+
+                fn writeBefore(self: *const @This(),
+                        buf: []u8, index: Index) void {
+                    utils.writeBefore(@This(), self, buf, index);
+                }
+
+                fn readBefore(buf: []const u8, index: Index) @This() {
+                    return utils.readBefore(@This(), buf, index);
+                }
+            };
+        }
 
         pub const TypeInfo = struct {
             data: config.Data_tinfo,
@@ -260,7 +270,7 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
         pub fn explicitCreate(self: *Self, comptime T: type,
                 tinfo: TypeInfo, thing: T) CreateError!Ptr(T) {
             assert( typeCheck(T, tinfo) );
-            const ptr = try self.unsafeCreate(tinfo, @ptrCast(*const anyopaque, &thing));
+            const ptr = try self.unsafeCreate(tinfo, &thing);
             return Ptr(T).fromIndex(ptr.toIndex());
         }
 
@@ -278,6 +288,57 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
             assert( index + tinfo.size() <= self.curr_end );
             const thing_ptr = &buf[index];
             return @ptrCast(*align(1) const T, thing_ptr);
+        }
+
+        fn calcPreFrameIndex(self: Self, comptime State: type,
+                frame_idx: FrameCnt) Index {
+            const F = Frame(State);
+            return @as(Index, self.buffer.len)
+                - @sizeOf(F) * frame_idx;
+        }
+
+        pub fn advanceFrame(self: *Self, comptime State: type,
+                state: State) CreateError!Ptr(State) {
+            const old_end = self.curr_end;
+            const F = Frame(State);
+            const preFrameIndex
+                = self.calcPreFrameIndex(State, self.frameCnt);
+            const statePtr = try self.create(State, state);
+            if ( self.curr_end + @sizeOf(F) > preFrameIndex ) {
+                self.*.curr_end = old_end;
+                return CreateError.OutOfMemory;
+            }
+            const new_frame = F{
+                .frame = self.curr_frame,
+                .ptr = statePtr,
+            };
+            new_frame.writeBefore(&self.buffer, preFrameIndex);
+            self.*.curr_frame += 1;
+            self.*.frameCnt += 1;
+            return statePtr;
+        }
+
+        pub fn getFrame(self: *const Self, comptime State: type,
+                frameNum: FrameCnt) Ptr(State) {
+            assert( self.curr_frame > frameNum );
+            const frameBack = self.curr_frame - frameNum;
+            assert( frameBack <= self.frameCnt );
+            const frame_idx = self.frameCnt - frameBack;
+            const preFrameIndex
+                = self.calcPreFrameIndex(State, frame_idx);
+            const frame = Frame(State)
+                .readBefore(&self.buffer, preFrameIndex);
+            return frame.ptr;
+        }
+
+        pub fn getFrameBack(self: *const Self, comptime State: type,
+                frameBack: FrameCnt) Ptr(State) {
+            return self.getFrame(State, self.curr_frame - frameBack - 1);
+        }
+
+        pub fn getLastFrame(self: *const Self,
+                comptime State: type) Ptr(State) {
+            return self.getFrameBack(State, 0);
         }
     };
 }
@@ -319,7 +380,7 @@ test "typeInfoPackedStruct" {
     try testing.expectEqual(expDtinfo, dtinfo);
 }
 
-test "PureBuffer Example" {
+test "PureBuffer create Example" {
     const PB = PureBuffer(.{});
     var test_buffer = [_]u8{0} ** 1024;
     var pb = PB{
@@ -375,7 +436,7 @@ test "PureBuffer Example" {
     try testing.expectEqual(d, dptr.*);
     try testing.expectEqualSlices(u8, &test_buffer, buf);
 
-    std.mem.copy(u8, test_buffer[26..32], &.{ 7, 1, 2, 0, 2, 1 });
+    copy(u8, test_buffer[26..32], &.{ 7, 1, 2, 0, 2, 1 });
     const b2ref = try pb.create(B, b);
     const b2ptr = pb.deref(b2ref);
     try testing.expectEqual(a, aptr.*);
@@ -386,6 +447,112 @@ test "PureBuffer Example" {
     try testing.expectEqualSlices(u8, &test_buffer, buf);
 }
 
+test "PureBuffer advanceFrame example" {
+    const PB = PureBuffer(.{});
+    var test_buffer = [_]u8{0} ** 1024;
+    var pb = PB{
+        .curr_frame = 0x0107,
+    };
+    const buf = &pb.buffer;
+
+    const a = @as(u8, 35);
+    const A = @TypeOf(a);
+    const b = @as(u16, 0x0102);
+    const B = @TypeOf(b);
+    const State = packed struct {
+        int8: i8,
+        uint8: u8,
+        uint16: u16,
+        refA: PB.Ptr(A),
+        refB: PB.Ptr(B),
+    };
+
+    const copy = std.mem.copy;
+    copy(u8, test_buffer[0..5], &.{ 7, 1, 1, 0, 35 });
+    const aref = try pb.create(A, a);
+    const aptr = pb.deref(aref);
+    try testing.expectEqual(a, aptr.*);
+    try testing.expectEqualSlices(u8, &test_buffer, buf);
+
+    copy(u8, test_buffer[5..11], &.{ 7, 1, 2, 0, 2, 1 });
+    const bref = try pb.create(B, b);
+    const bptr = pb.deref(bref);
+    try testing.expectEqual(a, aptr.*);
+    try testing.expectEqual(b, bptr.*);
+    try testing.expectEqualSlices(u8, &test_buffer, buf);
+
+    const state1 = State{
+        .int8 = -1,
+        .uint8 = 10,
+        .uint16 = 0x0304,
+        .refA = aref,
+        .refB = bref,
+    };
+    const state1ref = try pb.advanceFrame(State, state1);
+    const state1ptr = pb.deref(state1ref);
+    copy(u8, test_buffer[11..23], &.{ 7, 1, 4, 4, 0xFF, 10, 4, 3,
+        @intCast(u8, aref.toIndex() & 0xFF),
+        @intCast(u8, aref.toIndex() >> 8),
+        @intCast(u8, bref.toIndex() & 0xFF),
+        @intCast(u8, bref.toIndex() >> 8),
+    });
+    copy(u8, test_buffer[0x3FC..0x400], &.{ 7, 1,
+        @intCast(u8, state1ref.toIndex() & 0xFF),
+        @intCast(u8, state1ref.toIndex() >> 8),
+    });
+    try testing.expectEqual(a, aptr.*);
+    try testing.expectEqual(b, bptr.*);
+    try testing.expectEqual(state1, state1ptr.*);
+    try testing.expectEqualSlices(u8, &test_buffer, buf);
+
+    // New frame
+    const a2 = @as(u8, 70);
+
+    copy(u8, test_buffer[23..28], &.{ 8, 1, 1, 0, 70 });
+    const a2ref = try pb.create(A, a2);
+    const a2ptr = pb.deref(a2ref);
+    try testing.expectEqual(a, aptr.*);
+    try testing.expectEqual(b, bptr.*);
+    try testing.expectEqual(state1, state1ptr.*);
+    try testing.expectEqual(a2, a2ptr.*);
+    try testing.expectEqualSlices(u8, &test_buffer, buf);
+
+    const state2 = State{
+        .int8 = state1.int8,
+        .uint8 = state1.uint8,
+        .uint16 = state1.uint16,
+        .refA = a2ref,
+        .refB = state1.refB,
+    };
+
+    const state2ref = try pb.advanceFrame(State, state2);
+    const state2ptr = pb.deref(state2ref);
+    copy(u8, test_buffer[28..40], &.{ 8, 1, 4, 4, 0xFF, 10, 4, 3,
+        @intCast(u8, a2ref.toIndex() & 0xFF),
+        @intCast(u8, a2ref.toIndex() >> 8),
+        @intCast(u8, bref.toIndex() & 0xFF),
+        @intCast(u8, bref.toIndex() >> 8),
+    });
+    copy(u8, test_buffer[0x3F8..0x3FC], &.{ 8, 1,
+        @intCast(u8, state2ref.toIndex() & 0xFF),
+        @intCast(u8, state2ref.toIndex() >> 8),
+    });
+    try testing.expectEqual(a, aptr.*);
+    try testing.expectEqual(b, bptr.*);
+    try testing.expectEqual(state1, state1ptr.*);
+    try testing.expectEqual(a2, a2ptr.*);
+    try testing.expectEqual(state2, state2ptr.*);
+    try testing.expectEqualSlices(u8, &test_buffer, buf);
+
+    try testing.expectEqual(state1ref, pb.getFrame(State, 0x0107));
+    try testing.expectEqual(state1ref, pb.getFrameBack(State, 1));
+
+    try testing.expectEqual(state2ref, pb.getFrame(State, 0x0108));
+    try testing.expectEqual(state2ref, pb.getFrameBack(State, 0));
+    try testing.expectEqual(state2ref, pb.getLastFrame(State));
+}
+
 test "It compiles!" {
     testing.refAllDeclsRecursive(@This());
+    testing.refAllDeclsRecursive(PureBuffer(.{}));
 }

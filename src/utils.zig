@@ -96,6 +96,22 @@ pub fn isUint(comptime T: type) bool {
     return info == .Int and info.Int.signedness == .unsigned;
 }
 
+pub fn writeBefore(comptime T: type, thing: *const T,
+        buf: []u8, index: usize) void {
+    const size = @sizeOf(T);
+    const begin = index - size;
+    const self_slice
+        = @as([]const u8, @ptrCast(*const [size]u8, thing));
+    std.mem.copy(u8, buf[begin..index], self_slice);
+}
+
+pub fn readBefore(comptime T: type,
+        buf: []const u8, index: usize) T {
+    const size = @sizeOf(T);
+    const begin = index - size;
+    return @ptrCast(*align(1) const T, &buf[begin]).*;
+}
+
 test "It compiles!" {
     testing.refAllDeclsRecursive(@This());
 }
