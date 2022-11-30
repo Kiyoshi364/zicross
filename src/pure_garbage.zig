@@ -132,14 +132,14 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
                 },
                 .Struct => |stct| typeInfoPackedStruct(T, stct),
                 else => @compileError(
-                    "Unsupported type: " ++ @typeName(T) ),
+                    "Unsupported type for infering typeInfo: " ++ @typeName(T) ),
             };
         }
 
         fn typeInfoPackedStruct(comptime T: type,
                 comptime stct: std.builtin.Type.Struct) TypeInfo {
             if ( stct.layout != .Packed ) {
-                @compileError("Non-packet struct not supported: "
+                @compileError("Infering typeInfo is only supported for packet structs: "
                     ++ @typeName(T));
             }
             comptime {
@@ -174,7 +174,9 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
                                     "Struct fields are not ordered: `"
                                     ++ low_ptr_name
                                     ++ "` starts before `"
-                                    ++ high_data_name ++ "`");
+                                    ++ high_data_name
+                                    ++ "` in struct `"
+                                    ++ @typeName(T) ++ "`");
                             }
                         }
                     } else {
@@ -193,7 +195,9 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
                                     "Struct fields are not ordered: `"
                                     ++ low_ptr_name
                                     ++ "` starts before `"
-                                    ++ high_data_name ++ "`");
+                                    ++ high_data_name
+                                    ++ "` in struct `"
+                                    ++ @typeName(T) ++ "`");
                             }
                         }
                     }
