@@ -31,7 +31,7 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
     cassert( utils.isUint(config.Data_tinfo),
         "Data_tinfo must be an uint type");
     cassert( utils.isUint(config.Ptr_tinfo),
-        "Data_tinfo must be an uint type");
+        "Ptr_tinfo must be an uint type");
     const VoidPtr = switch ( config.ptrType ) {
         .ptr => utils.ctodo(),
         .index => packed struct {
