@@ -132,7 +132,8 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
                 },
                 .Struct => |stct| typeInfoPackedStruct(T, stct),
                 else => @compileError(
-                    "Unsupported type for infering typeInfo: " ++ @typeName(T) ),
+                    "Unsupported type for infering typeInfo: `"
+                    ++ @typeName(T) ++ "`"),
             };
         }
 
