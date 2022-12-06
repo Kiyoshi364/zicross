@@ -30,7 +30,7 @@ export fn update() void {
 }
 
 const ST = ?*@import("std").builtin.StackTrace;
-pub fn panic(msg: []const u8, trace: ST) noreturn {
+pub fn panic(msg: []const u8, trace: ST, ret_addr: ?usize) noreturn {
     @setCold(true);
 
     w4.trace(">> ahh, panic!");
@@ -39,6 +39,11 @@ pub fn panic(msg: []const u8, trace: ST) noreturn {
         w4.tracef("  index: %d", @intCast(i32, t.index));
     } else {
         w4.trace("  no trace :(");
+    }
+    if ( ret_addr ) |r| {
+        w4.tracef("  ret_addr: %x", @intCast(i32, r));
+    } else {
+        w4.trace("  no ret_addr :(");
     }
 
     while ( true ) {
