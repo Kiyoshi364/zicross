@@ -24,6 +24,18 @@ pub const BufferConfig = struct {
     padding: Padding = .none,
 };
 
+pub const UniversalTypeInfo = struct {
+    data_size: usize,
+    ptr_size: usize,
+};
+
+pub const TypeInfoError = error { DataSizeTooBig, PtrSizeTooBig };
+
+pub const UniversalThing = struct {
+    typ: UniversalTypeInfo,
+    data: []const u8,
+};
+
 pub fn PureBuffer(comptime config: BufferConfig) type {
     const blen = config.blen;
     const Index = utils.UFitsUp(blen);
@@ -91,6 +103,28 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
 
             fn size(self: TypeInfo) Index {
                 return self.data + self.ptr;
+            }
+
+            fn fromUniversalTypeInfo(typ: UniversalTypeInfo) TypeInfoError!TypeInfo {
+                const max_data = @as(config.Data_tinfo, 0) -% 1;
+                const max_ptr = @as(config.Ptr_tinfo, 0) -% 1;
+                if ( typ.data > max_data ) {
+                    return TypeInfoError.DataSizeTooBig;
+                }
+                if ( typ.ptr_size > max_ptr ) {
+                    return TypeInfoError.PtrSizeTooBig;
+                }
+                return .{
+                    .data = typ.data_size,
+                    .ptr = typ.ptr_size,
+                };
+            }
+
+            fn toUniversalTypeInfo(self: TypeInfo) UniversalTypeInfo {
+                return .{
+                    .data_size = self.data,
+                    .ptr_size = self.ptr,
+                };
             }
         };
 
@@ -284,15 +318,35 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
             return self.explicitCreate(T, self.typeInfo(T), thing);
         }
 
+        pub fn derefUntyped(self: *const Self,
+                index: Index) UniversalThing {
+            const buf = &self.buffer;
+            const tinfo = Header.readBefore(buf, index).info;
+            assert( index + tinfo.size() <= self.curr_end );
+            return .{
+                .typ = tinfo.toUniversalTypeInfo(),
+                .data = buf[index..index + tinfo.size()],
+            };
+        }
+
         pub fn deref(self: *const Self,
                 ref: anytype) *align(1) const @TypeOf(ref).typ {
             const T = @TypeOf(ref).typ;
-            const buf = &self.buffer;
             const index = ref.toIndex();
-            const tinfo = Header.readBefore(buf, index).info;
-            assert( index + tinfo.size() <= self.curr_end );
-            const thing_ptr = &buf[index];
+            const thing_ptr = &self.derefUntyped(index).data[0];
             return @ptrCast(*align(1) const T, thing_ptr);
+        }
+
+        fn getChildUntyped(self: *const Self,
+                parent: Index, child_num: config.Ptr_tinfo) ?UniversalThing {
+            const buf = &self.buffer;
+            const tinfo = Header.readBefore(buf, parent).info;
+            return if ( child_num < tinfo.ptr ) blk: {
+                const child_ptr_offset = tinfo.data + child_num;
+                assert( parent + child_ptr_offset <= self.curr_end );
+                const child_index = buf[parent + child_ptr_offset];
+                break :blk self.derefUntyped(child_index);
+            } else null;
         }
 
         fn calcPreFrameIndex(self: Self, comptime State: type,
@@ -344,6 +398,44 @@ pub fn PureBuffer(comptime config: BufferConfig) type {
         pub fn getLastFrame(self: *const Self,
                 comptime State: type) Ptr(State) {
             return self.getFrameBack(State, 0);
+        }
+
+        pub fn deepCopyTo(self: *const Self,
+                comptime config2: BufferConfig,
+                dest: *PureBuffer(config2),
+                comptime T: type,
+                root: PureBuffer(config2).Ptr(T)) CreateError!void {
+            return dest.deepCopyFrom(config, self, T, root);
+        }
+
+        fn deepCopyUntypedFrom(self: *Self,
+                comptime config2: BufferConfig,
+                src: *const PureBuffer(config2),
+                tinfo: TypeInfo,
+                root: PureBuffer(config2).Index) CreateError!void {
+            _ = self;
+            _ = src;
+            _ = tinfo;
+            _ = root;
+            utils.todo();
+        }
+
+        pub fn deepCopyFrom(self: *Self,
+                comptime config2: BufferConfig,
+                src: *const PureBuffer(config2),
+                comptime T: type,
+                root: PureBuffer(config2).Ptr(T)) CreateError!void {
+            const saved_end = self.curr_end;
+            var i = @as(usize, 0);
+            while ( src.getChildUntyped(root, i) ) |child_ptr| {
+                self.deepCopyUntypedFrom(config2, src, child_ptr) catch |err| {
+                    self.*.curr_end = saved_end;
+                    return err;
+            };
+                i += 1;
+            }
+            // self.create();
+            utils.todo();
         }
     };
 }
